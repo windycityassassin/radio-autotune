@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auto-Tune FM</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Menlo', 'Courier New', monospace;
+    background: radial-gradient(ellipse at top, #1a1410, #050402);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 28px 20px;
+    color: #ddd;
+  }
+  .radio {
+    width: 100%;
+    max-width: 620px;
+    background: linear-gradient(180deg, #3a2f25, #1f1812);
+    border-radius: 20px;
+    padding: 26px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);
+    border: 1px solid #4a3f33;
+  }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  h1 { font-size: 13px; letter-spacing: 5px; color: #a89070; font-weight: bold; }
+  .brand { font-size: 10px; letter-spacing: 3px; color: #6a5840; }
+
+  .display {
+    background: #0e0700;
+    border: 2px solid #2a1f10;
+    border-radius: 10px;
+    padding: 18px 22px;
+    box-shadow: inset 0 3px 10px rgba(0,0,0,0.8);
+    margin-bottom: 20px;
+  }
+  .display-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  #station-name {
+    font-size: 28px;
+    font-weight: bold;
+    color: #ffb84a;
+    text-shadow: 0 0 12px rgba(255, 150, 50, 0.55);
+    letter-spacing: 1px;
+    line-height: 1.1;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #classification {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #888;
+    padding-left: 12px;
+  }
+  #classification.music { color: #6fdc7d; text-shadow: 0 0 6px rgba(100,220,120,0.5); }
+  #classification.speech { color: #ff7050; text-shadow: 0 0 6px rgba(255,100,80,0.5); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  .meta {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #8a7050;
+    letter-spacing: 1.5px;
+    display: flex;
+    justify-content: space-between;
+    min-height: 16px;
+  }
+  .score-row { margin-top: 14px; }
+  .score-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #8a7050;
+    letter-spacing: 2px;
+    margin-bottom: 5px;
+  }
+  .score-label .val { color: #ffb84a; }
+  .score-bar {
+    height: 8px;
+    background: #2a1f10;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .score-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6fdc7d 0%, #ffb84a 50%, #ff5050 100%);
+    width: 0%;
+    transition: width 0.1s linear;
+  }
+  .score-threshold {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background: #fff;
+    opacity: 0.5;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  button {
+    flex: 1;
+    padding: 13px 8px;
+    background: linear-gradient(180deg, #4a3f33, #2a1f10);
+    border: 1px solid #5a4f43;
+    border-radius: 6px;
+    color: #b89060;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.1s;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  button:hover { background: linear-gradient(180deg, #5a4f43, #3a2f23); }
+  button:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+  button.on {
+    color: #ffb84a;
+    background: linear-gradient(180deg, #5a4020, #3a2010);
+    box-shadow: 0 0 14px rgba(255, 150, 50, 0.35), inset 0 0 10px rgba(255, 150, 50, 0.2);
+    text-shadow: 0 0 6px rgba(255, 150, 50, 0.5);
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .stations-wrap {
+    background: #100a04;
+    border: 1px solid #2a1f10;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .stations-wrap::-webkit-scrollbar { width: 8px; }
+  .stations-wrap::-webkit-scrollbar-track { background: #15100a; }
+  .stations-wrap::-webkit-scrollbar-thumb { background: #4a3f33; border-radius: 4px; }
+  .stations {
+    padding: 8px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+  .st {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    padding: 8px 12px;
+    font-size: 12px;
+    border-radius: 5px;
+    letter-spacing: 1px;
+    color: #8a7050;
+    cursor: pointer;
+    transition: background 0.1s;
+    gap: 10px;
+  }
+  .st:hover { background: rgba(255, 150, 50, 0.06); }
+  .st-name { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st-tag { font-size: 9px; color: #6a5840; letter-spacing: 1.5px; }
+  .st-codec { font-size: 9px; color: #6a5840; letter-spacing: 1.5px; }
+  .st.tuned {
+    background: rgba(255, 150, 50, 0.18);
+    color: #ffb84a;
+    box-shadow: inset 0 0 0 1px rgba(255, 150, 50, 0.3);
+  }
+  .st.tuned .st-tag, .st.tuned .st-codec { color: #c89060; }
+  .st.skipped { opacity: 0.35; }
+
+  .stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 14px;
+    background: #100a04;
+    border: 1px solid #2a1f10;
+    border-radius: 8px;
+    font-size: 10px;
+    color: #8a7050;
+    letter-spacing: 1.5px;
+  }
+  .stat-block { text-align: center; }
+  .stat-block .val {
+    display: block;
+    font-size: 22px;
+    color: #ffb84a;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(255, 150, 50, 0.4);
+    margin-bottom: 3px;
+  }
+
+  .loading {
+    padding: 30px;
+    text-align: center;
+    color: #6a5840;
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+
+  .footer {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 9px;
+    color: #5a4830;
+    letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+  <div class="radio">
+    <div class="header">
+      <h1>AUTO-TUNE FM</h1>
+      <span class="brand">v0.2 &middot; LIVE STREAMS</span>
+    </div>
+
+    <div class="display">
+      <div class="display-top">
+        <span id="station-name">— STANDBY —</span>
+        <span id="classification">·</span>
+      </div>
+      <div class="meta">
+        <span id="meta-left"></span>
+        <span id="meta-right"></span>
+      </div>
+      <div class="score-row">
+        <div class="score-label">
+          <span>SPEECH SCORE</span>
+          <span class="val" id="score-val">0.00</span>
+        </div>
+        <div class="score-bar">
+          <div class="score-fill" id="score-fill"></div>
+          <div class="score-threshold" id="score-threshold"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="play">PLAY</button>
+      <button id="skip">SKIP &#9654;</button>
+      <button id="auto">AUTO-SKIP: OFF</button>
+    </div>
+
+    <div class="stations-wrap">
+      <div id="stations" class="stations">
+        <div class="loading">FETCHING STATIONS&hellip;</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-block"><span class="val" id="ads-skipped">0</span>SKIPS</div>
+      <div class="stat-block"><span class="val" id="music-time">0:00</span>MUSIC TIME</div>
+      <div class="stat-block"><span class="val" id="speech-time">0:00</span>SPEECH HEARD</div>
+    </div>
+
+    <audio id="audio" crossorigin="anonymous" preload="none"></audio>
+
+    <div class="footer">REAL STREAMS &middot; REAL ANALYSIS &middot; CLICK A STATION TO TUNE</div>
+  </div>
+
+<script>
+'use strict';
+
+const SKIP_THRESHOLD = 0.55;
+const SKIP_HOLD_SECONDS = 5;
+const WARMUP_SECONDS = 4;
+const FRAME_INTERVAL_MS = 100;
+const WINDOW_FRAMES = 30;
+
+const audio = document.getElementById('audio');
+const stationNameEl = document.getElementById('station-name');
+const classificationEl = document.getElementById('classification');
+const metaLeftEl = document.getElementById('meta-left');
+const metaRightEl = document.getElementById('meta-right');
+const scoreValEl = document.getElementById('score-val');
+const scoreFillEl = document.getElementById('score-fill');
+const scoreThresholdEl = document.getElementById('score-threshold');
+const playBtn = document.getElementById('play');
+const skipBtn = document.getElementById('skip');
+const autoBtn = document.getElementById('auto');
+const stationsEl = document.getElementById('stations');
+const adsSkippedEl = document.getElementById('ads-skipped');
+const musicTimeEl = document.getElementById('music-time');
+const speechTimeEl = document.getElementById('speech-time');
+
+scoreThresholdEl.style.left = (SKIP_THRESHOLD * 100) + '%';
+
+let stations = [];
+let currentIdx = -1;
+let playing = false;
+let autoSkip = false;
+let skippedIds = new Set();
+
+let ctx = null, source = null, analyser = null;
+let timeBuf = null, freqBuf = null;
+
+let frameWindow = [];
+let currentScore = 0;
+let speechSecondsAtThreshold = 0;
+let stationStartedAt = 0;
+
+let adsSkipped = 0, musicSec = 0, speechSec = 0;
+
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+async function loadStations() {
+  try {
+    const res = await fetch('/stations');
+    stations = await res.json();
+    if (!stations.length) {
+      stationsEl.innerHTML = '<div class="loading">NO STATIONS FOUND. CHECK INTERNET.</div>';
+      return;
+    }
+    renderStations();
+  } catch (e) {
+    stationsEl.innerHTML = '<div class="loading">FAILED TO LOAD STATIONS.</div>';
+    console.error(e);
+  }
+}
+
+function renderStations() {
+  stationsEl.innerHTML = stations.map((s, i) => {
+    const tuned = i === currentIdx ? 'tuned' : '';
+    const skipped = skippedIds.has(s.id) ? 'skipped' : '';
+    return `<div class="st ${tuned} ${skipped}" data-idx="${i}">
+      <span class="st-name">${escapeHtml(s.name)}</span>
+      <span class="st-tag">${escapeHtml(s.tag.toUpperCase())}</span>
+      <span class="st-codec">${escapeHtml(s.codec)} ${s.bitrate || ''}</span>
+    </div>`;
+  }).join('');
+  stationsEl.querySelectorAll('.st').forEach(el => {
+    el.addEventListener('click', () => tuneTo(parseInt(el.dataset.idx)));
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function initAudioGraph() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  source = ctx.createMediaElementSource(audio);
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.0;
+  source.connect(analyser);
+  analyser.connect(ctx.destination);
+  timeBuf = new Float32Array(analyser.fftSize);
+  freqBuf = new Float32Array(analyser.frequencyBinCount);
+}
+
+function tuneTo(idx) {
+  if (idx < 0 || idx >= stations.length) return;
+  currentIdx = idx;
+  const s = stations[idx];
+  stationNameEl.textContent = s.name;
+  metaLeftEl.textContent = `${s.codec} ${s.bitrate ? s.bitrate + 'k' : ''}`.trim();
+  metaRightEl.textContent = (s.country || '').toUpperCase() + ' &middot; ' + s.tag.toUpperCase();
+  metaRightEl.innerHTML = (s.country || '').toUpperCase() + ' &middot; ' + s.tag.toUpperCase();
+  audio.src = '/stream?url=' + encodeURIComponent(s.url);
+  resetClassifier();
+  stationStartedAt = performance.now() / 1000;
+  if (playing) {
+    audio.play().catch(e => console.warn('play failed:', e.message));
+  }
+  renderStations();
+}
+
+function resetClassifier() {
+  frameWindow = [];
+  currentScore = 0;
+  speechSecondsAtThreshold = 0;
+}
+
+function extractFrame() {
+  analyser.getFloatTimeDomainData(timeBuf);
+  analyser.getFloatFrequencyData(freqBuf);
+
+  let zc = 0;
+  let sumSq = 0;
+  for (let i = 0; i < timeBuf.length; i++) {
+    const v = timeBuf[i];
+    sumSq += v * v;
+    if (i > 0 && ((timeBuf[i - 1] < 0) !== (v < 0))) zc++;
+  }
+  const zcr = zc / timeBuf.length;
+  const rms = Math.sqrt(sumSq / timeBuf.length);
+
+  let weighted = 0, total = 0;
+  for (let i = 0; i < freqBuf.length; i++) {
+    const db = freqBuf[i];
+    if (db < -90) continue;
+    const mag = Math.pow(10, db / 20);
+    weighted += i * mag;
+    total += mag;
+  }
+  const centroid = total > 0 ? weighted / total : 0;
+
+  return { zcr, rms, centroid };
+}
+
+function computeSpeechScore() {
+  if (frameWindow.length < WINDOW_FRAMES) return 0;
+  const w = frameWindow.slice(-WINDOW_FRAMES);
+
+  const meanRms = w.reduce((a, f) => a + f.rms, 0) / w.length;
+  const lowFrames = w.filter(f => f.rms < 0.5 * meanRms).length;
+  const lster = lowFrames / w.length;
+
+  const meanZcr = w.reduce((a, f) => a + f.zcr, 0) / w.length;
+  const zcrVar = w.reduce((a, f) => a + (f.zcr - meanZcr) ** 2, 0) / w.length;
+  const zcrStd = Math.sqrt(zcrVar);
+
+  const meanCent = w.reduce((a, f) => a + f.centroid, 0) / w.length;
+  const centVar = w.reduce((a, f) => a + (f.centroid - meanCent) ** 2, 0) / w.length;
+  const centRelStd = meanCent > 0 ? Math.sqrt(centVar) / meanCent : 0;
+
+  const lsterScore = Math.min(1, lster / 0.22);
+  const zcrScore = Math.min(1, zcrStd / 0.045);
+  const centScore = Math.min(1, centRelStd / 0.45);
+
+  return 0.45 * lsterScore + 0.30 * zcrScore + 0.25 * centScore;
+}
+
+function classifierTick() {
+  if (!playing || !analyser || ctx.state !== 'running') {
+    scoreFillEl.style.width = '0%';
+    scoreValEl.textContent = '0.00';
+    classificationEl.textContent = playing ? 'BUFFERING' : '·';
+    classificationEl.className = '';
+    return;
+  }
+
+  const frame = extractFrame();
+  frameWindow.push(frame);
+  if (frameWindow.length > WINDOW_FRAMES * 2) frameWindow.shift();
+
+  if (frame.rms < 0.001) {
+    classificationEl.textContent = 'NO AUDIO';
+    classificationEl.className = '';
+    return;
+  }
+
+  const raw = computeSpeechScore();
+  currentScore = currentScore * 0.75 + raw * 0.25;
+
+  scoreValEl.textContent = currentScore.toFixed(2);
+  scoreFillEl.style.width = (currentScore * 100).toFixed(0) + '%';
+
+  const tunedFor = performance.now() / 1000 - stationStartedAt;
+  if (tunedFor < WARMUP_SECONDS) {
+    classificationEl.textContent = 'WARMING UP';
+    classificationEl.className = '';
+    return;
+  }
+
+  if (currentScore > SKIP_THRESHOLD) {
+    classificationEl.textContent = '● SPEECH / AD';
+    classificationEl.className = 'speech';
+    speechSecondsAtThreshold += FRAME_INTERVAL_MS / 1000;
+    speechSec += FRAME_INTERVAL_MS / 1000;
+    if (autoSkip && speechSecondsAtThreshold >= SKIP_HOLD_SECONDS) {
+      skippedIds.add(stations[currentIdx].id);
+      adsSkipped++;
+      doSkip();
+    }
+  } else {
+    classificationEl.textContent = '♪ MUSIC';
+    classificationEl.className = 'music';
+    speechSecondsAtThreshold = Math.max(0, speechSecondsAtThreshold - FRAME_INTERVAL_MS / 1000);
+    musicSec += FRAME_INTERVAL_MS / 1000;
+  }
+
+  adsSkippedEl.textContent = adsSkipped;
+  musicTimeEl.textContent = fmtTime(musicSec);
+  speechTimeEl.textContent = fmtTime(speechSec);
+}
+setInterval(classifierTick, FRAME_INTERVAL_MS);
+
+function doSkip() {
+  if (!stations.length) return;
+  let next = currentIdx;
+  for (let i = 1; i <= stations.length; i++) {
+    const candidate = (currentIdx + i) % stations.length;
+    if (!skippedIds.has(stations[candidate].id)) {
+      next = candidate;
+      break;
+    }
+  }
+  if (next === currentIdx && skippedIds.size >= stations.length - 1) {
+    skippedIds.clear();
+    next = (currentIdx + 1) % stations.length;
+  }
+  tuneTo(next);
+}
+
+playBtn.addEventListener('click', async () => {
+  if (!stations.length) return;
+  if (!playing) {
+    initAudioGraph();
+    if (ctx.state === 'suspended') await ctx.resume();
+    if (currentIdx < 0) tuneTo(0);
+    try {
+      await audio.play();
+      playing = true;
+      playBtn.textContent = 'PAUSE';
+      playBtn.classList.add('on');
+    } catch (e) {
+      console.warn('play failed:', e.message);
+    }
+  } else {
+    audio.pause();
+    playing = false;
+    playBtn.textContent = 'PLAY';
+    playBtn.classList.remove('on');
+  }
+});
+
+skipBtn.addEventListener('click', () => {
+  if (!stations.length) return;
+  doSkip();
+});
+
+autoBtn.addEventListener('click', () => {
+  autoSkip = !autoSkip;
+  autoBtn.classList.toggle('on', autoSkip);
+  autoBtn.textContent = `AUTO-SKIP: ${autoSkip ? 'ON' : 'OFF'}`;
+});
+
+audio.addEventListener('error', () => {
+  console.warn('audio error, skipping');
+  if (currentIdx >= 0) skippedIds.add(stations[currentIdx].id);
+  setTimeout(doSkip, 500);
+});
+
+audio.addEventListener('stalled', () => console.warn('audio stalled'));
+
+loadStations();
+</script>
+</body>
+</html>
